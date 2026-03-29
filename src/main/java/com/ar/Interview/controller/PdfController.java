@@ -7,6 +7,7 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import java.io.ByteArrayOutputStream;
@@ -15,7 +16,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 
 @RestController
-public class RestHomeController {
+@RequestMapping("/pdf")
+public class PdfController {
 
     // @GetMapping("/no-of-pages/{from}/{to}")
     // public String noOfPages(@PathVariable int from,
