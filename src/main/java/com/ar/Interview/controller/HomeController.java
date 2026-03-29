@@ -10,6 +10,6 @@ public class HomeController {
     @GetMapping("/test")
     public String home(Model model) {
         model.addAttribute("name", "A R");
-        return "test"; // refers to index.html
+        return "test"; // refers to resources/templates/test.html
     }
 }
