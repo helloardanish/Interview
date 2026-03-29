@@ -13,26 +13,44 @@ public class ImageCompressionService {
     public Path compressImage(String inputPath, long targetSizeBytes) {
 
         Mat image = opencv_imgcodecs.imread(inputPath);
-
         String outputPath = generateOutputPath(inputPath);
 
-        int quality = 90;
+        int low = 10;
+        int high = 100;
 
-        while (quality > 10) {
+        int bestQuality = high;
+        long closestSizeDiff = Long.MAX_VALUE;
+
+        while (low <= high) {
+
+            int mid = (low + high) / 2;
+
             opencv_imgcodecs.imwrite(
                     outputPath,
                     image,
-                    new int[]{opencv_imgcodecs.IMWRITE_JPEG_QUALITY, quality}
-            );
+                    new int[] { opencv_imgcodecs.IMWRITE_JPEG_QUALITY, mid });
 
             long fileSize = new java.io.File(outputPath).length();
+            long diff = Math.abs(fileSize - targetSizeBytes);
 
-            if (fileSize <= targetSizeBytes) {
-                break;
+            // Track closest result
+            if (diff < closestSizeDiff) {
+                closestSizeDiff = diff;
+                bestQuality = mid;
             }
 
-            quality -= 5;
+            if (fileSize > targetSizeBytes) {
+                high = mid - 1; // reduce quality
+            } else {
+                low = mid + 1; // increase quality
+            }
         }
+
+        // Final write with best quality
+        opencv_imgcodecs.imwrite(
+                outputPath,
+                image,
+                new int[] { opencv_imgcodecs.IMWRITE_JPEG_QUALITY, bestQuality });
 
         return Paths.get(outputPath);
     }
