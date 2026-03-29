@@ -12,12 +12,17 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 
 @RestController
 @RequestMapping("/pdf")
 public class PdfController {
+
+    @Value("${pdf.file-path}")
+    private String filePath;
 
     // @GetMapping("/no-of-pages/{from}/{to}")
     // public String noOfPages(@PathVariable int from,
@@ -29,7 +34,6 @@ public class PdfController {
     public ResponseEntity<byte[]> noOfPages(@RequestParam int from,
             @RequestParam int to) throws IOException {
 
-        String filePath = "/Users/helloardanish/Downloads/Essential-Grammar-in-Use-Main.pdf"; // change path
         File file = new File(filePath);
 
         try (PDDocument originalDoc = Loader.loadPDF(file);

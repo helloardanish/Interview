@@ -1,3 +1,11 @@
 spring:
   application:
     name: Interview
+
+
+pdf:
+  file-path: /Users/helloardanish/Downloads/Essential-Grammar-in-Use-Main.pdf
+
+
+
+
