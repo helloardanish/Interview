@@ -1,0 +1,19 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <title>Zip Solver</title>
+  </head>
+  <body>
+    <h2>Upload Puzzle Image</h2>
+
+    <form method="post" enctype="multipart/form-data" action="/upload">
+      <input type="file" name="file" accept="image/*" required />
+      <button type="submit">Solve</button>
+    </form>
+
+    <div th:if="${resultImage}">
+      <h3>Solution:</h3>
+      <img th:src="@{'/result/' + ${resultImage}}" width="500" />
+    </div>
+  </body>
+</html>
