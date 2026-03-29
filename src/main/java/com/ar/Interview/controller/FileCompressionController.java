@@ -52,7 +52,8 @@ public class FileCompressionController {
         logger.info("Path is {} and size is {}", path, size);
         long targetSizeBytes = FileSizeParser.parse(size);
 
-        Path outputPath = pdfService.compressPdf(path, targetSizeBytes);
+        // Path outputPath = pdfService.compressPdf(path, targetSizeBytes);
+        Path outputPath = pdfService.forceCompressPdf(path, targetSizeBytes);
 
         return ResponseEntity.ok("Compressed PDF saved at: " + outputPath);
     }
