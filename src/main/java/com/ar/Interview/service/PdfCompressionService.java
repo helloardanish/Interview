@@ -1,17 +1,13 @@
 package com.ar.Interview.service;
 
 import org.apache.pdfbox.Loader;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.PDResources;
+import org.apache.pdfbox.pdmodel.*;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.springframework.stereotype.Service;
 
-import javax.imageio.IIOImage;
-import javax.imageio.ImageIO;
-import javax.imageio.ImageWriteParam;
-import javax.imageio.ImageWriter;
+import javax.imageio.*;
 import javax.imageio.stream.ImageOutputStream;
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.nio.file.Path;
@@ -21,115 +17,127 @@ import java.util.Iterator;
 @Service
 public class PdfCompressionService {
 
+    private static final long TOLERANCE = 5 * 1024; // ±5KB
+    private static final int MIN_QUALITY = 10;
+    private static final int MAX_QUALITY = 100;
+
     public Path compressPdf(String inputPath, long targetSizeBytes) {
 
         String outputPath = inputPath.replace(".pdf", "_compressed.pdf");
 
-        int low = 10;
-        int high = 100;
-        int bestQuality = high;
+        int low = MIN_QUALITY;
+        int high = MAX_QUALITY;
+
+        byte[] bestResult = null;
         long closestDiff = Long.MAX_VALUE;
 
         while (low <= high) {
 
             int mid = (low + high) / 2;
 
-            File tempFile = new File("temp_" + mid + ".pdf");
+            byte[] compressedPdf = compressToBytes(inputPath, mid);
+            long size = compressedPdf.length;
 
-            try (PDDocument document = Loader.loadPDF(new File(inputPath))) {
+            long diff = Math.abs(size - targetSizeBytes);
 
-                for (PDPage page : document.getPages()) {
-                    PDResources resources = page.getResources();
-
-                    for (var name : resources.getXObjectNames()) {
-
-                        if (resources.isImageXObject(name)) {
-
-                            PDImageXObject image = (PDImageXObject) resources.getXObject(name);
-
-                            BufferedImage bufferedImage = image.getImage();
-
-                            byte[] compressedBytes = compressBufferedImage(bufferedImage, mid);
-
-                            PDImageXObject compressedImage = PDImageXObject.createFromByteArray(
-                                    document,
-                                    compressedBytes,
-                                    "compressed");
-
-                            resources.put(name, compressedImage);
-                        }
-                    }
-                }
-
-                document.save(tempFile);
-
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-
-            long fileSize = tempFile.length();
-            long diff = Math.abs(fileSize - targetSizeBytes);
-
+            // Save best match
             if (diff < closestDiff) {
                 closestDiff = diff;
-                bestQuality = mid;
+                bestResult = compressedPdf;
             }
 
-            if (fileSize > targetSizeBytes) {
+            // 🎯 Early exit if within tolerance
+            if (diff <= TOLERANCE) {
+                bestResult = compressedPdf;
+                break;
+            }
+
+            if (size > targetSizeBytes) {
                 high = mid - 1;
             } else {
                 low = mid + 1;
             }
-
-            tempFile.delete();
         }
 
-        // Final pass with best quality
-        applyFinalCompression(inputPath, outputPath, bestQuality);
+        // Final write
+        try (FileOutputStream fos = new FileOutputStream(outputPath)) {
+            fos.write(bestResult);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to write compressed PDF", e);
+        }
 
         return Paths.get(outputPath);
     }
 
-    private void applyFinalCompression(String inputPath, String outputPath, int quality) {
+    private byte[] compressToBytes(String inputPath, int quality) {
 
-        try (PDDocument document = Loader.loadPDF(new File(inputPath))) {
+        try (PDDocument document = Loader.loadPDF(new File(inputPath));
+                ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
 
             for (PDPage page : document.getPages()) {
+
                 PDResources resources = page.getResources();
 
                 for (var name : resources.getXObjectNames()) {
 
-                    if (resources.isImageXObject(name)) {
+                    if (!resources.isImageXObject(name))
+                        continue;
 
+                    try {
                         PDImageXObject image = (PDImageXObject) resources.getXObject(name);
 
                         BufferedImage bufferedImage = image.getImage();
 
-                        byte[] compressedBytes = compressBufferedImage(bufferedImage, quality);
+                        // Skip tiny images (performance optimization)
+                        if (bufferedImage.getWidth() < 100 ||
+                                bufferedImage.getHeight() < 100) {
+                            continue;
+                        }
 
-                        PDImageXObject compressedImage = PDImageXObject.createFromByteArray(
+                        byte[] compressedImage = compressImage(bufferedImage, quality);
+
+                        PDImageXObject newImage = PDImageXObject.createFromByteArray(
                                 document,
-                                compressedBytes,
+                                compressedImage,
                                 "compressed");
 
-                        resources.put(name, compressedImage);
+                        resources.put(name, newImage);
+
+                    } catch (Exception e) {
+                        // Skip problematic images (JBIG2, CCITT, etc.)
+                        continue;
                     }
                 }
             }
 
-            document.save(outputPath);
+            document.save(baos);
+            return baos.toByteArray();
 
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Compression failed", e);
         }
     }
 
-    private byte[] compressBufferedImage(BufferedImage image, int quality)
+    private byte[] compressImage(BufferedImage image, int quality)
             throws IOException {
+
+        // ✅ Convert to RGB (fix for "Bogus input colorspace")
+        BufferedImage rgbImage = new BufferedImage(
+                image.getWidth(),
+                image.getHeight(),
+                BufferedImage.TYPE_INT_RGB);
+
+        Graphics2D g = rgbImage.createGraphics();
+        g.drawImage(image, 0, 0, null);
+        g.dispose();
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
         Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpg");
+
+        if (!writers.hasNext()) {
+            throw new RuntimeException("No JPEG writer available");
+        }
 
         ImageWriter writer = writers.next();
 
@@ -137,13 +145,13 @@ public class PdfCompressionService {
         param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
         param.setCompressionQuality(quality / 100f);
 
-        ImageOutputStream ios = ImageIO.createImageOutputStream(baos);
-        writer.setOutput(ios);
+        try (ImageOutputStream ios = ImageIO.createImageOutputStream(baos)) {
 
-        writer.write(null, new IIOImage(image, null, null), param);
+            writer.setOutput(ios);
+            writer.write(null, new IIOImage(rgbImage, null, null), param);
+        }
 
         writer.dispose();
-        ios.close();
 
         return baos.toByteArray();
     }

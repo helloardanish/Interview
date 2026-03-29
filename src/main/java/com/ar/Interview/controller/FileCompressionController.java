@@ -43,7 +43,7 @@ public class FileCompressionController {
         return ResponseEntity.ok("Compressed image saved at: " + outputPath);
     }
 
-    // localhost:8080/api/v1/files/pdf/resize?path=/Users/helloardanish/Downloads/2026-syllabus.pdf&size=800kb
+    // localhost:8080/api/v1/files/pdf/resize?path=/Users/helloardanish/Downloads/2026-syllabus.pdf&size=100kb
     @GetMapping("/pdf/resize")
     public ResponseEntity<String> resizePdf(
             @RequestParam String path,
